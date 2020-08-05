@@ -49,14 +49,19 @@ def create_app(test_config=None):
 
   @app.route('/questions', methods=['GET'])
   def retrieve_questions():
-    page = request.args.get('page',1, type=int)
-    categories = Category.query.order_by(Category.id).all()
-    current_category = Category.query.order_by(Category.id).first()
-    selection_query = Question.query.filter(Category.id==current_category.id).all()
-    questions = pagenate_questions(request, selection_query)
-    
+        
+    questions = None    
+    try:
+      page = request.args.get('page',1, type=int)
+      categories = Category.query.order_by(Category.id).all()
+      current_category = Category.query.order_by(Category.id).first()
+      selection_query = Question.query.filter(Category.id==current_category.id).all()
+      questions = pagenate_questions(request, selection_query)
+  
+    except:
+      abort(422)
 
-    if not current_category:
+    if len(questions) == 0:
       abort(404)
 
     data={
@@ -95,14 +100,14 @@ def create_app(test_config=None):
   '''
   @app.route('/questions/<int:question_id>', methods=['DELETE'])
   def delete_question(question_id):
+        
+    question_delete = Question.query.filter(Question.id==question_id).one_or_none()
+    if question_delete is None:
+          print('I am inside it')
+          abort(404)    
+
     try:
-      question_delete = Question.query.get(question_id)
-
-      if question_delete:
-        question_delete.delete()
-      else:
-        abort(404)
-
+      question_delete.delete()
     except:
       abort(422)
     
@@ -150,15 +155,19 @@ def create_app(test_config=None):
   '''
   @app.route('/categories/<int:category_id>/questions',methods=['GET'])
   def retrieve_questions_by_category(category_id):
+        
+    questions=None
     try:
       page = request.args.get('page',1, type=int)
       current_category = Category.query.get(category_id)
       selection_query = Question.query.filter(Question.category==category_id).all()
       questions = pagenate_questions(request, selection_query)
- 
+
     except:
       abort(422)
-    
+
+    if len(questions) == 0:
+            abort(404)
 
     data={
       'success': True, 
@@ -218,31 +227,36 @@ def create_app(test_config=None):
     body = request.get_json()
     previous_questions = body.get('previous_questions',None)
     quiz_category = body.get('quiz_category',None)
-    
+
     questions = None
     
     if quiz_category['id'] == 0:
       questions = Question.query.all()
     else:
-      questions = Question.query.filter(Question.category == quiz_category['id']).all()
+      questions = Question.query.filter(Question.category == int(quiz_category['id'])+1).all()
     
-    print('questions',questions)
-    
+   
     current_question = ''
-    if len(questions) > 0:
-
-      count = len(questions)
-
+    questions_count = len(questions)
+    search_conut = 0
+    if questions_count > 0:
+      
       while True:
-        index = random.randrange(count)
+        index = random.randrange(questions_count)
         current_question = questions[index]
+        search_conut +=1
 
-        if current_question not in previous_questions:
-          break
+        if current_question.id not in previous_questions:
+              break
+          
+        if len(previous_questions) == questions_count or search_conut == questions_count:
+              current_question=''
+              break
+    
 
     return jsonify({
       'success': True, 
-      'question': current_question.format()
+      'question': current_question.format() if current_question else None
     })
     
 
@@ -252,26 +266,26 @@ def create_app(test_config=None):
   '''
   @app.errorhandler(404)
   def not_found(error):
-    return jsonify({
-      "success": False, 
-      "error": 404,
-      "message": "resource not found"
+      return jsonify({
+          "success": False, 
+          "error": 404,
+          "message": "resource not found"
       }), 404
 
   @app.errorhandler(422)
   def unprocessable(error):
-    return jsonify({
-      "success": False, 
-      "error": 422,
-      "message": "unprocessable"
+      return jsonify({
+          "success": False, 
+          "error": 422,
+          "message": "unprocessable"
       }), 422
 
   @app.errorhandler(400)
   def bad_request(error):
-    return jsonify({
-      "success": False, 
-      "error": 400,
-      "message": "bad request"
+      return jsonify({
+          "success": False, 
+          "error": 400,
+          "message": "bad request"
       }), 400
 
   return app
